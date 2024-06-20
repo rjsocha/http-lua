@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -eufo pipefail
+IFS=$'\t\n'
+BASE="http-lua"
+
+if [[ -z ${1-} ]]; then
+  printf -- "usage: %s <script.lua>\n" "${0}"
+  exit 1
+fi
+
+if [[ ! -x ./${BASE} ]]; then
+  printf -- "error: '%s' required ...\n" "${BASE}"
+  exit 1
+fi
+script="${1}"
+if [[ ! -s ${script} ]]; then
+  printf -- "error: %s script missing ...\n" "${script}"
+  exit 1
+fi
+
+if ! [[ ${script} =~ \.lua$ ]]; then
+  printf -- "error: %s is not lua script ...\n" "${script}"
+  exit
+fi
+
+terminator() {
+  local RC=$?
+  trap - ERR
+  trap - EXIT
+  if [[ -n ${tempScript-} ]]; then
+    rm -- "${tempScript}"
+  fi
+  exit ${RC}
+}
+
+trap terminator EXIT
+trap terminator ERR
+
+tempScript="$(mktemp -q -p .)"
+
+lastByte="$(tail -c 1 "${script}" | od  -An -v -t x1 | tr -d ' ')"
+cp "${script}" "${tempScript}"
+if [[ ${lastByte} != '00' ]]; then
+  printf -- "padding script with nul character ...\n"
+  printf -- '\0' >>"${tempScript}"
+fi
+lastByte="$(tail -c 1 "${tempScript}" | od  -An -v -t x1 | tr -d ' ')"
+if [[ ${lastByte} != '00' ]]; then
+  printf -- "error: missing nul padding ...\n"
+  exit 1
+fi
+
+base="$(basename "${script}" .lua)"
+cp "${BASE}" "${base}"
+objcopy --update-section "LUAScript=${tempScript}" "${base}"
+if command -v upx &>/dev/null; then
+  upx "${base}"
+fi

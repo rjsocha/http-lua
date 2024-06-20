@@ -1,0 +1,4 @@
+all: http-lua
+
+http-lua: src/http-lua.c src/httpserver.h
+	gcc -o http-lua -s -O2 src/http-lua.c /usr/lib/x86_64-linux-gnu/liblua5.4.a -I/usr/include/lua5.4 -lm
